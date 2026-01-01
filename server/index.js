@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
+import fs from 'fs';
 
 // Setup require for CommonJS modules like sqlite3
 const require = createRequire(import.meta.url);
@@ -18,14 +19,25 @@ const PORT = 3001;
 app.use(cors());
 app.use(express.json());
 
+// Request Logger
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} [${req.method}] ${req.url}`);
+  next();
+});
+
 // Database Setup
 const dbPath = path.resolve(__dirname, 'consultant.db');
+const dbDir = path.dirname(dbPath);
+
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true });
+}
+
 console.log('Connecting to database at:', dbPath);
 
 const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
-    process.exit(1);
   } else {
     console.log('Connected to SQLite database.');
   }
@@ -53,6 +65,10 @@ db.serialize(() => {
 
 // --- API Routes ---
 
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date() });
+});
+
 // Get all quizzes
 app.get('/api/quizzes', (req, res) => {
   db.all('SELECT * FROM quizzes ORDER BY id DESC', [], (err, rows) => {
@@ -61,7 +77,6 @@ app.get('/api/quizzes', (req, res) => {
       return res.status(500).json({ error: err.message });
     }
     
-    // Safely parse JSON
     try {
       const quizzes = rows.map(row => ({
         ...row,
@@ -177,18 +192,30 @@ app.delete('/api/submissions/:id', (req, res) => {
   });
 });
 
+// API 404 Handler - Catch API requests not handled above
+app.use('/api/*', (req, res) => {
+  res.status(404).json({ error: `API endpoint not found: ${req.baseUrl}` });
+});
+
 // Serve Frontend in Production
-// Check if we are running in a production-like environment (or explicit variable)
-// Since this script is usually run via 'npm start', we default to serving static files
-// unless explicitly in development mode (which uses Vite's proxy).
+// Only serve static files if NOT in development (local dev usually uses Vite dev server)
 if (process.env.NODE_ENV !== 'development') {
   const distPath = path.join(__dirname, '../dist');
-  app.use(express.static(distPath));
   
-  // Handle React Routing, return all requests to React app
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
+  if (fs.existsSync(distPath)) {
+    console.log(`Serving static files from ${distPath}`);
+    app.use(express.static(distPath));
+    
+    // Handle React Routing, return all requests to React app
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  } else {
+    console.warn(`WARNING: dist folder not found at ${distPath}. Static files will not be served.`);
+    app.get('*', (req, res) => {
+      res.status(404).send('Frontend build not found. Run npm run build.');
+    });
+  }
 }
 
 app.listen(PORT, '0.0.0.0', () => {
