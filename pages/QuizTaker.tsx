@@ -8,16 +8,18 @@ export const QuizTaker: React.FC = () => {
   const { id } = useParams();
   
   const [quiz, setQuiz] = useState<Quiz | null>(null);
-  // Store array of selected option IDs per question ID
   const [answers, setAnswers] = useState<Record<number, number[]>>({});
   const [submitted, setSubmitted] = useState(false);
   const [scoreData, setScoreData] = useState({ score: 0, maxScore: 0 });
 
   useEffect(() => {
-    if (id) {
-      const found = storageService.getQuiz(Number(id));
-      if (found) setQuiz(found);
-    }
+    const fetchQuiz = async () => {
+      if (id) {
+        const found = await storageService.getQuiz(Number(id));
+        if (found) setQuiz(found);
+      }
+    };
+    fetchQuiz();
   }, [id]);
 
   const handleSelect = (questionId: number, optionId: number, type: 'single' | 'multi') => {
@@ -26,7 +28,6 @@ export const QuizTaker: React.FC = () => {
       if (type === 'single') {
         return { ...prev, [questionId]: [optionId] };
       } else {
-        // Multi logic: toggle
         if (current.includes(optionId)) {
           return { ...prev, [questionId]: current.filter(id => id !== optionId) };
         } else {
@@ -40,12 +41,9 @@ export const QuizTaker: React.FC = () => {
     let max = 0;
     quiz.questions.forEach(q => {
       if (q.type === 'single') {
-        // Max possible for single choice is the highest option score
         const maxOpt = Math.max(...q.options.map(o => o.score), 0);
         max += maxOpt;
       } else {
-        // Max possible for multi choice is sum of all positive scores
-        // Assuming user checks all correct answers
         const maxMulti = q.options.reduce((sum, o) => sum + (o.score > 0 ? o.score : 0), 0);
         max += maxMulti;
       }
@@ -53,7 +51,7 @@ export const QuizTaker: React.FC = () => {
     return max;
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!quiz) return;
 
     let totalScore = 0;
@@ -78,12 +76,12 @@ export const QuizTaker: React.FC = () => {
       answers: finalAnswers
     };
 
-    storageService.saveSubmission(submission);
+    await storageService.saveSubmission(submission);
     setScoreData({ score: totalScore, maxScore: calculateMaxScore(quiz) });
     setSubmitted(true);
   };
 
-  if (!quiz) return <div>Loading...</div>;
+  if (!quiz) return <div className="p-8 text-center text-gray-500">Loading assessment...</div>;
 
   if (submitted) {
     return (

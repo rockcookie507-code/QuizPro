@@ -2,24 +2,34 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { storageService } from '../services/storage';
 import { Quiz } from '../types';
-import { Plus, Edit2, Play, Trash2 } from 'lucide-react';
+import { Plus, Edit2, Play, Trash2, Link as LinkIcon, Check } from 'lucide-react';
 
 export const QuizList: React.FC = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
 
-  const loadQuizzes = () => {
-    setQuizzes(storageService.getQuizzes());
+  const loadQuizzes = async () => {
+    const data = await storageService.getQuizzes();
+    setQuizzes(data);
   };
 
   useEffect(() => {
     loadQuizzes();
   }, []);
 
-  const handleDelete = (id: number) => {
+  const handleDelete = async (id: number) => {
     if (confirm('Are you sure you want to delete this quiz?')) {
-      storageService.deleteQuiz(id);
+      await storageService.deleteQuiz(id);
       loadQuizzes();
     }
+  };
+
+  const copyLink = (id: number) => {
+    // Construct the public URL: domain/#/s/123
+    const url = `${window.location.origin}/#/s/${id}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   return (
@@ -49,14 +59,24 @@ export const QuizList: React.FC = () => {
               </div>
             </div>
             
-            <div className="p-4 bg-gray-50 border-t border-gray-100 flex justify-between rounded-b-xl">
-              <Link 
-                to={`/quizzes/${quiz.id}/take`}
-                className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 hover:text-emerald-700"
-              >
-                <Play className="w-4 h-4" /> Take
-              </Link>
-              <div className="flex gap-4">
+            <div className="p-4 bg-gray-50 border-t border-gray-100 flex flex-col gap-3 rounded-b-xl">
+              <div className="flex gap-2">
+                 <button 
+                  onClick={() => copyLink(quiz.id)}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-gray-300 rounded text-sm font-medium text-gray-700 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+                >
+                  {copiedId === quiz.id ? <Check className="w-4 h-4 text-emerald-500" /> : <LinkIcon className="w-4 h-4" />}
+                  {copiedId === quiz.id ? 'Copied!' : 'Copy Link'}
+                </button>
+                 <Link 
+                  to={`/quizzes/${quiz.id}/take`}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-600 text-white rounded text-sm font-medium hover:bg-emerald-700"
+                >
+                  <Play className="w-4 h-4" /> Preview
+                </Link>
+              </div>
+
+              <div className="flex justify-between pt-2 border-t border-gray-100">
                 <Link 
                   to={`/quizzes/${quiz.id}/edit`}
                   className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700"

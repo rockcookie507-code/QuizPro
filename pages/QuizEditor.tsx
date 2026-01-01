@@ -17,15 +17,18 @@ export const QuizEditor: React.FC = () => {
   });
 
   useEffect(() => {
-    if (id) {
-      const found = storageService.getQuiz(Number(id));
-      if (found) setQuiz(found);
-    }
+    const fetchQuiz = async () => {
+      if (id) {
+        const found = await storageService.getQuiz(Number(id));
+        if (found) setQuiz(found);
+      }
+    };
+    fetchQuiz();
   }, [id]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!quiz.title) return alert("Title is required");
-    storageService.saveQuiz(quiz);
+    await storageService.saveQuiz(quiz);
     navigate('/quizzes');
   };
 

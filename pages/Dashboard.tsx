@@ -1,7 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
 import { storageService } from '../services/storage';
 import { Submission, Quiz } from '../types';
 import { Trash2, Users, Target, ChevronDown } from 'lucide-react';
@@ -13,21 +10,24 @@ export const Dashboard: React.FC = () => {
   const [quizStats, setQuizStats] = useState({ count: 0, avgScore: 0 });
 
   useEffect(() => {
-    const q = storageService.getQuizzes();
-    setQuizzes(q);
-    if (q.length > 0 && !selectedQuizId) {
-      setSelectedQuizId(q[0].id);
-    }
+    const fetchQuizzes = async () => {
+      const q = await storageService.getQuizzes();
+      setQuizzes(q);
+      if (q.length > 0 && !selectedQuizId) {
+        setSelectedQuizId(q[0].id);
+      }
+    };
+    fetchQuizzes();
   }, []);
 
   useEffect(() => {
     loadData();
   }, [selectedQuizId]);
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!selectedQuizId) return;
     
-    const allSubmissions = storageService.getSubmissions();
+    const allSubmissions = await storageService.getSubmissions();
     const filtered = allSubmissions.filter(s => s.quiz_id === selectedQuizId);
     setSubmissions(filtered);
 
@@ -41,9 +41,9 @@ export const Dashboard: React.FC = () => {
     });
   };
 
-  const handleDeleteSubmission = (id: number) => {
+  const handleDeleteSubmission = async (id: number) => {
     if (confirm('Are you sure you want to delete this submission?')) {
-      storageService.deleteSubmission(id);
+      await storageService.deleteSubmission(id);
       loadData();
     }
   };
@@ -55,7 +55,6 @@ export const Dashboard: React.FC = () => {
     if (!selectedQuiz) return [];
     
     return selectedQuiz.questions.map(q => {
-      // Calculate how many times each option was selected
       const optionCounts = q.options.map(opt => {
         const count = submissions.reduce((acc, sub) => {
           const hasSelected = sub.answers.some(a => a.question_id === q.id && a.option_id === opt.id);
@@ -77,7 +76,6 @@ export const Dashboard: React.FC = () => {
           <p className="text-gray-500">Deep dive into assessment results.</p>
         </div>
         
-        {/* Quiz Selector */}
         <div className="relative">
           <select 
             className="appearance-none bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-indigo-500 focus:border-indigo-500 block w-64 p-2.5 pr-8"
@@ -95,7 +93,6 @@ export const Dashboard: React.FC = () => {
 
       {selectedQuiz ? (
         <>
-          {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex items-center gap-4">
               <div className="p-3 bg-indigo-50 text-indigo-600 rounded-lg">
@@ -117,7 +114,6 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Submissions List */}
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-gray-100">
               <h3 className="text-lg font-bold text-gray-900">Recent Submissions</h3>
@@ -163,7 +159,6 @@ export const Dashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Question Analysis */}
           <div className="space-y-6">
              <h3 className="text-xl font-bold text-gray-900">Question Analysis</h3>
              {questionAnalysis.map((q, idx) => (
