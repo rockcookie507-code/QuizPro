@@ -1,10 +1,19 @@
 import { Quiz, Submission } from '../types';
 
-// Helper to handle API responses
+// Helper to handle API responses with better error logging
 const fetchApi = async (endpoint: string, options?: RequestInit) => {
-  const res = await fetch(`/api${endpoint}`, options);
-  if (!res.ok) throw new Error('API request failed');
-  return res.json();
+  try {
+    const res = await fetch(`/api${endpoint}`, options);
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error(`API Error ${res.status} at ${endpoint}: ${errorText}`);
+      throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+    }
+    return await res.json();
+  } catch (error) {
+    console.error(`Network error requesting ${endpoint}:`, error);
+    throw error;
+  }
 };
 
 export const storageService = {
@@ -16,6 +25,7 @@ export const storageService = {
     try {
       return await fetchApi(`/quizzes/${id}`);
     } catch (e) {
+      console.warn('Quiz not found or error fetching:', e);
       return undefined;
     }
   },

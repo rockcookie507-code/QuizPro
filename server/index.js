@@ -1,8 +1,12 @@
 import express from 'express';
-import sqlite3 from 'sqlite3';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
+
+// Setup require for CommonJS modules like sqlite3
+const require = createRequire(import.meta.url);
+const sqlite3 = require('sqlite3').verbose();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,9 +20,15 @@ app.use(express.json());
 
 // Database Setup
 const dbPath = path.resolve(__dirname, 'consultant.db');
+console.log('Connecting to database at:', dbPath);
+
 const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) console.error('Error opening database:', err);
-  else console.log('Connected to SQLite database at', dbPath);
+  if (err) {
+    console.error('Error opening database:', err.message);
+    process.exit(1);
+  } else {
+    console.log('Connected to SQLite database.');
+  }
 });
 
 // Initialize Tables
@@ -46,13 +56,22 @@ db.serialize(() => {
 // Get all quizzes
 app.get('/api/quizzes', (req, res) => {
   db.all('SELECT * FROM quizzes ORDER BY id DESC', [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    // Parse JSON strings back to objects
-    const quizzes = rows.map(row => ({
-      ...row,
-      questions: JSON.parse(row.questions)
-    }));
-    res.json(quizzes);
+    if (err) {
+      console.error('DB Error:', err);
+      return res.status(500).json({ error: err.message });
+    }
+    
+    // Safely parse JSON
+    try {
+      const quizzes = rows.map(row => ({
+        ...row,
+        questions: row.questions ? JSON.parse(row.questions) : []
+      }));
+      res.json(quizzes);
+    } catch (parseError) {
+      console.error('JSON Parse Error:', parseError);
+      res.status(500).json({ error: 'Failed to parse quiz data' });
+    }
   });
 });
 
@@ -61,39 +80,51 @@ app.get('/api/quizzes/:id', (req, res) => {
   db.get('SELECT * FROM quizzes WHERE id = ?', [req.params.id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Quiz not found' });
-    const quiz = {
-      ...row,
-      questions: JSON.parse(row.questions)
-    };
-    res.json(quiz);
+    
+    try {
+      const quiz = {
+        ...row,
+        questions: row.questions ? JSON.parse(row.questions) : []
+      };
+      res.json(quiz);
+    } catch (parseError) {
+      console.error('JSON Parse Error:', parseError);
+      res.status(500).json({ error: 'Failed to parse quiz data' });
+    }
   });
 });
 
 // Create/Update Quiz
 app.post('/api/quizzes', (req, res) => {
   const { id, title, description, created_at, questions } = req.body;
-  const questionsJson = JSON.stringify(questions);
+  
+  try {
+    const questionsJson = JSON.stringify(questions || []);
 
-  if (id && id !== 0) {
-    // Update
-    db.run(
-      `UPDATE quizzes SET title = ?, description = ?, questions = ? WHERE id = ?`,
-      [title, description, questionsJson, id],
-      function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Updated', id });
-      }
-    );
-  } else {
-    // Create
-    db.run(
-      `INSERT INTO quizzes (title, description, created_at, questions) VALUES (?, ?, ?, ?)`,
-      [title, description, created_at, questionsJson],
-      function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Created', id: this.lastID });
-      }
-    );
+    if (id && id !== 0) {
+      // Update
+      db.run(
+        `UPDATE quizzes SET title = ?, description = ?, questions = ? WHERE id = ?`,
+        [title, description, questionsJson, id],
+        function(err) {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ message: 'Updated', id });
+        }
+      );
+    } else {
+      // Create
+      db.run(
+        `INSERT INTO quizzes (title, description, created_at, questions) VALUES (?, ?, ?, ?)`,
+        [title, description, created_at, questionsJson],
+        function(err) {
+          if (err) return res.status(500).json({ error: err.message });
+          res.json({ message: 'Created', id: this.lastID });
+        }
+      );
+    }
+  } catch (e) {
+    console.error('Save Error:', e);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
@@ -109,18 +140,24 @@ app.delete('/api/quizzes/:id', (req, res) => {
 app.get('/api/submissions', (req, res) => {
   db.all('SELECT * FROM submissions ORDER BY id DESC', [], (err, rows) => {
     if (err) return res.status(500).json({ error: err.message });
-    const submissions = rows.map(row => ({
-      ...row,
-      answers: JSON.parse(row.answers)
-    }));
-    res.json(submissions);
+    
+    try {
+      const submissions = rows.map(row => ({
+        ...row,
+        answers: row.answers ? JSON.parse(row.answers) : []
+      }));
+      res.json(submissions);
+    } catch (e) {
+      console.error('JSON Parse Error:', e);
+      res.status(500).json({ error: 'Failed to parse submission data' });
+    }
   });
 });
 
 // Save Submission
 app.post('/api/submissions', (req, res) => {
   const { quiz_id, total_score, submitted_at, answers } = req.body;
-  const answersJson = JSON.stringify(answers);
+  const answersJson = JSON.stringify(answers || []);
 
   db.run(
     `INSERT INTO submissions (quiz_id, total_score, submitted_at, answers) VALUES (?, ?, ?, ?)`,
@@ -141,15 +178,19 @@ app.delete('/api/submissions/:id', (req, res) => {
 });
 
 // Serve Frontend in Production
+// Check if we are running in a production-like environment (or explicit variable)
+// Since this script is usually run via 'npm start', we default to serving static files
+// unless explicitly in development mode (which uses Vite's proxy).
 if (process.env.NODE_ENV !== 'development') {
-  app.use(express.static(path.join(__dirname, '../dist')));
+  const distPath = path.join(__dirname, '../dist');
+  app.use(express.static(distPath));
   
   // Handle React Routing, return all requests to React app
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
+    res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   console.log(`Server running on port ${PORT}`);
 });
