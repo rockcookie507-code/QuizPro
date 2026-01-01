@@ -1,17 +1,35 @@
 import { Quiz, Submission } from '../types';
 
+// Determine the base URL. 
+// In development or preview, we might want to target port 3001 directly if the proxy fails.
+// However, standard practice is relative paths. 
+// If you continue to see 404s, you can change this to 'http://localhost:3001'
+const API_BASE = ''; 
+
 // Helper to handle API responses with better error logging
 const fetchApi = async (endpoint: string, options?: RequestInit) => {
+  const url = `${API_BASE}/api${endpoint}`;
   try {
-    const res = await fetch(`/api${endpoint}`, options);
+    const res = await fetch(url, options);
+    
+    // Check if the response is JSON (API) or HTML (404 from static server)
+    const contentType = res.headers.get("content-type");
+    
     if (!res.ok) {
-      const errorText = await res.text();
-      console.error(`API Error ${res.status} at ${endpoint}: ${errorText}`);
-      throw new Error(`API request failed: ${res.status} ${res.statusText}`);
+      if (contentType && contentType.includes("application/json")) {
+        const errorJson = await res.json();
+        console.error(`API Error ${res.status}:`, errorJson);
+        throw new Error(errorJson.error || `API request failed: ${res.status}`);
+      } else {
+        const errorText = await res.text();
+        // If we get "File not found" it means we hit the static server, not the API
+        console.error(`API Connectivity Error. Is the backend running on port 3001? Response: ${errorText}`);
+        throw new Error(`Cannot connect to API (${res.status}). Ensure backend is running.`);
+      }
     }
     return await res.json();
   } catch (error) {
-    console.error(`Network error requesting ${endpoint}:`, error);
+    console.error(`Network error requesting ${url}:`, error);
     throw error;
   }
 };

@@ -16,7 +16,7 @@ const app = express();
 const PORT = 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors()); // Allow all CORS requests
 app.use(express.json());
 
 // Request Logger
@@ -85,7 +85,6 @@ app.get('/api/quizzes', (req, res) => {
       res.json(quizzes);
     } catch (parseError) {
       console.error('JSON Parse Error:', parseError);
-      // Return empty array on parse error to prevent app crash
       res.json([]);
     }
   });
@@ -165,7 +164,6 @@ app.get('/api/submissions', (req, res) => {
       res.json(submissions);
     } catch (e) {
       console.error('JSON Parse Error:', e);
-      // Return empty array on error
       res.json([]);
     }
   });
@@ -194,13 +192,13 @@ app.delete('/api/submissions/:id', (req, res) => {
   });
 });
 
-// API 404 Handler - Catch API requests not handled above
+// API 404 Handler - MUST be before static files
 app.use('/api/*', (req, res) => {
   res.status(404).json({ error: `API endpoint not found: ${req.baseUrl}` });
 });
 
 // Serve Frontend in Production
-// Only serve static files if NOT in development (local dev usually uses Vite dev server)
+// Only serve static files if NOT in development
 if (process.env.NODE_ENV !== 'development') {
   const distPath = path.join(__dirname, '../dist');
   
@@ -213,9 +211,9 @@ if (process.env.NODE_ENV !== 'development') {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   } else {
-    console.warn(`WARNING: dist folder not found at ${distPath}. Static files will not be served.`);
-    app.get('*', (req, res) => {
-      res.status(404).send('Frontend build not found. Run npm run build.');
+    // If dist doesn't exist, just send a basic message
+    app.get('/', (req, res) => {
+      res.send('API Server Running. Frontend not found in /dist (Run npm run build).');
     });
   }
 }
