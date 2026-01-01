@@ -85,7 +85,8 @@ app.get('/api/quizzes', (req, res) => {
       res.json(quizzes);
     } catch (parseError) {
       console.error('JSON Parse Error:', parseError);
-      res.status(500).json({ error: 'Failed to parse quiz data' });
+      // Return empty array on parse error to prevent app crash
+      res.json([]);
     }
   });
 });
@@ -164,7 +165,8 @@ app.get('/api/submissions', (req, res) => {
       res.json(submissions);
     } catch (e) {
       console.error('JSON Parse Error:', e);
-      res.status(500).json({ error: 'Failed to parse submission data' });
+      // Return empty array on error
+      res.json([]);
     }
   });
 });
